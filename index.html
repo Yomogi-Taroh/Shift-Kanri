@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>よもぎ薬局 シフト管理</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7;color:#1d1d1f;min-height:100vh}
+.header{background:#fff;border-bottom:1px solid #e0e0e0;padding:14px 20px;position:sticky;top:0;z-index:10}
+.header h1{font-size:17px;font-weight:600;color:#1d1d1f}
+.header p{font-size:12px;color:#888;margin-top:2px}
+.wrap{max-width:480px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#1d1d1f}
+h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
+.btn{display:block;width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;border:none;text-align:center}
+.btn-primary{background:#3C3489;color:#fff}
+.btn-primary:hover{background:#2d2568}
+.btn-secondary{background:#f0f0f5;color:#3C3489}
+.btn-sub{background:#f5f5f7;color:#555;font-size:13px;padding:8px;border-radius:8px;border:1px solid #e0e0e0;cursor:pointer;width:100%}
+.field{margin-bottom:10px}
+.field label{font-size:12px;color:#666;display:block;margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1d1d1f}
+.field textarea{resize:vertical;min-height:60px;font-family:inherit}
+.staff-btn{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;border:1px solid #e0e0e0;background:#fff;cursor:pointer;margin-bottom:8px;width:100%;text-align:left}
+.staff-btn:hover{background:#f9f9fb}
+.avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0}
+.av0{background:#E1F5EE;color:#085041}
+.av1{background:#E6F1FB;color:#0C447C}
+.av2{background:#FAEEDA;color:#633806}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;margin-left:auto;flex-shrink:0}
+.tag-done{background:#E1F5EE;color:#085041}
+.tag-wait{background:#FAEEDA;color:#633806}
+.day-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap}
+.day-row:last-child{border-bottom:none}
+.day-label{font-size:13px;min-width:72px;color:#333;flex-shrink:0}
+.time-input{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:95px;color:#1d1d1f;background:#fff}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-head{font-size:10px;color:#999;text-align:center;padding:4px 0}
+.cal-cell{min-height:52px;border-radius:6px;border:1px solid #eee;padding:3px;background:#fff;cursor:pointer;font-size:10px}
+.cal-cell:hover{border-color:#ccc}
+.cal-cell.closed{background:#f5f5f7;cursor:default;opacity:0.4}
+.cal-cell.empty{border:none;background:transparent;cursor:default}
+.day-n{font-size:11px;color:#666;font-weight:500}
+.sh-badge{font-size:9px;padding:1px 3px;border-radius:3px;margin-top:1px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh0{background:#E1F5EE;color:#085041}
+.sh1{background:#E6F1FB;color:#0C447C}
+.sh2{background:#FAEEDA;color:#633806}
+.sum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.sum-card{background:#f9f9fb;border-radius:8px;padding:8px;text-align:center}
+.sum-name{font-size:11px;color:#888;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum-n{font-size:20px;font-weight:600;color:#1d1d1f}
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tab{flex:1;padding:8px;border-radius:8px;border:1px solid #e0e0e0;font-size:13px;cursor:pointer;background:#fff;color:#555;text-align:center}
+.tab.active{background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;font-weight:500}
+.hint{font-size:12px;color:#888;line-height:1.6;margin-bottom:12px}
+.sep{border:none;border-top:1px solid #f0f0f0;margin:12px 0}
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.nav-btn{background:#f0f0f5;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;color:#333}
+.nav-title{flex:1;text-align:center;font-size:14px;font-weight:500}
+.month-selector{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.month-btn{flex:1;min-width:80px;padding:10px;border-radius:8px;border:1px solid #e0e0e0;background:#fff;font-size:13px;cursor:pointer;text-align:center}
+.month-btn.active{background:#EEEDFE;border-color:#AFA9EC;color:#3C3489;font-weight:500}
+.loading{text-align:center;padding:40px;color:#888;font-size:14px}
+.comment-box{background:#f9f9fb;border-radius:8px;padding:10px;margin-top:8px}
+.comment-row{display:flex;gap:8px;margin-bottom:6px;align-items:flex-start}
+.comment-row:last-child{margin-bottom:0}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>よもぎ薬局 シフト管理</h1>
+  <p id="header-sub">スタッフの名前を選んでください</p>
+</div>
+
+<div class="wrap" id="root">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://uafkhqqpvjbfluybcrnp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_GcJGL8Bof8MEmb-xvNw9rA_OIPjCwEu';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const STAFF = ['坂本美桜', '白井晴', '関川穂乃佳'];
+const AVC = ['av0','av1','av2'];
+const SHC = ['sh0','sh1','sh2'];
+
+const HOLIDAYS = new Set(['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24','2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-23']);
+
+let state = { view:'top', staffIdx:null, year:new Date().getFullYear(), month:new Date().getMonth(), data:[], modalDay:null };
+
+function toKey(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
+function isClosed(y,m,d){const dt=new Date(y,m,d),dow=dt.getDay();return dow===2||dow===0||HOLIDAYS.has(toKey(y,m,d));}
+function workDays(y,m){const days=new Date(y,m+1,0).getDate(),r=[];for(let d=1;d<=days;d++)if(!isClosed(y,m,d))r.push(d);return r;}
+
+async function loadData(){
+  const {data} = await sb.from('shifts').select('*').eq('year',state.year).eq('month',state.month+1);
+  state.data = data||[];
+}
+
+function getStaffData(si){return state.data.filter(r=>r.staff_name===STAFF[si]);}
+function getDayData(y,m,d){return state.data.filter(r=>r.year===y&&r.month===m+1&&r.day===d);}
+function isSubmitted(si){return state.data.some(r=>r.staff_name===STAFF[si]);}
+
+async function saveStaff(si, rows, comment){
+  await sb.from('shifts').delete().eq('year',state.year).eq('month',state.month+1).eq('staff_name',STAFF[si]);
+  if(rows.length>0) await sb.from('shifts').insert(rows);
+  await loadData();
+}
+
+function render(){
+  const root=document.getElementById('root');
+  if(state.view==='top') renderTop(root);
+  else if(state.view==='staff') renderStaff(root);
+  else if(state.view==='calendar') renderCalendar(root);
+}
+
+function renderTop(root){
+  document.getElementById('header-sub').textContent='スタッフの名前を選んでください';
+  const allDone=STAFF.every((_,i)=>isSubmitted(i));
+  let html=`<div class="tabs">
+    <div class="tab active">ホーム</div>
+    <div class="tab" onclick="state.view='calendar';render()">カレンダー</div>
+  </div>
+  <div class="card">
+    <h2>${state.year}年${state.month+1}月 シフト調整</h2>
+    <p class="hint">自分の名前を選んで、希望を入力してください。火・日・祝日は除外されています。</p>`;
+
+  const now=new Date();
+  const months=[];
+  for(let i=0;i<3;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    months.push({y:d.getFullYear(),m:d.getMonth()});
+  }
+  html+=`<div class="month-selector">`;
+  months.forEach(({y,m})=>{
+    const active=(y===state.year&&m===state.month)?'active':'';
+    html+=`<div class="month-btn ${active}" onclick="changeMonth(${y},${m})">${y}年${m+1}月</div>`;
+  });
+  html+=`</div>`;
+
+  STAFF.forEach((name,i)=>{
+    const done=isSubmitted(i);
+    html+=`<button class="staff-btn" onclick="selectStaff(${i})">
+      <div class="avatar ${AVC[i]}">${name.slice(0,1)}</div>
+      <div><div style="font-size:14px;font-weight:500">${name}</div>
+      <div style="font-size:12px;color:#888">${done?'入力済み':'未入力'}</div></div>
+      <span class="tag ${done?'tag-done':'tag-wait'}">${done?'完了':'未入力'}</span>
+    </button>`;
+  });
+
+  html+=`</div>`;
+
+  if(allDone){
+    html+=`<button class="btn btn-primary" onclick="assignShifts()">シフトを自動割り振り</button>`;
+  } else {
+    const cnt=STAFF.filter((_,i)=>isSubmitted(i)).length;
+    html+=`<div style="text-align:center;padding:8px 0;font-size:13px;color:#888">${cnt}/3名が入力完了</div>`;
+  }
+  root.innerHTML=html;
+}
+
+async function changeMonth(y,m){
+  state.year=y; state.month=m;
+  root.innerHTML='<div class="loading">読み込み中...</div>';
+  await loadData();
+  render();
+}
+
+async function selectStaff(i){
+  state.staffIdx=i; state.view='staff';
+  render();
+}
+
+function renderStaff(root){
+  const si=state.staffIdx;
+  const name=STAFF[si];
+  const y=state.year,m=state.month;
+  document.getElementById('header-sub').textContent=`${name}さんの希望入力`;
+  const wd=workDays(y,m);
+  const existing=getStaffData(si);
+  const existMap={};
+  existing.forEach(r=>{existMap[r.day]={is_off:r.is_off,from:r.start_time,to:r.end_time};});
+  const comment=existing.find(r=>r.comment)?.comment||'';
+  const dows=['日','月','火','水','木','金','土'];
+
+  let dayRows='';
+  wd.forEach(day=>{
+    const dt=new Date(y,m,day);
+    const ex=existMap[day];
+    const isOff=ex?ex.is_off:false;
+    const from=ex&&!ex.is_off?ex.from:'09:00';
+    const to=ex&&!ex.is_off?ex.to:'18:00';
+    dayRows+=`<div class="day-row">
+      <span class="day-label">${m+1}/${day}(${dows[dt.getDay()]})</span>
+      <input type="checkbox" id="off_${day}" ${isOff?'checked':''} onchange="toggleOff(${day},this.checked)" style="width:16px;height:16px;flex-shrink:0"/>
+      <label for="off_${day}" style="font-size:12px;color:#888;flex-shrink:0">休み</label>
+      <input type="time" class="time-input" id="fr_${day}" value="${from}" ${isOff?'disabled':''} onchange="setTime(${day},'from',this.value)"/>
+      <span style="font-size:12px;color:#999;flex-shrink:0">〜</span>
+      <input type="time" class="time-input" id="to_${day}" value="${to}" ${isOff?'disabled':''} onchange="setTime(${day},'to',this.value)"/>
+    </div>`;
+  });
+
+  root.innerHTML=`
+  <button class="btn-sub" style="margin-bottom:12px" onclick="state.view='top';render()">← ホームに戻る</button>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div class="avatar ${AVC[si]}">${name.slice(0,1)}</div>
+      <div><div style="font-size:15px;font-weight:600">${name}</div>
+      <div style="font-size:12px;color:#888">${y}年${m+1}月の希望</div></div>
+    </div>
+    <p class="hint">休みたい日はチェック。時間は日ごとに変更できます。</p>
+    <div id="day-rows">${dayRows}</div>
+  </div>
+  <div class="card">
+    <h3>一言コメント</h3>
+    <div class="field">
+      <textarea id="comment-input" placeholder="何かあれば...">${comment}</textarea>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="submitStaff(${si})">入力を確定する</button>`;
+
+  window._staffDays={};
+  wd.forEach(day=>{
+    const ex=existMap[day];
+    window._staffDays[day]={is_off:ex?ex.is_off:false,from:ex&&!ex.is_off?ex.from:'09:00',to:ex&&!ex.is_off?ex.to:'18:00'};
+  });
+}
+
+function toggleOff(day,checked){
+  window._staffDays[day].is_off=checked;
+  const fr=document.getElementById('fr_'+day);
+  const to=document.getElementById('to_'+day);
+  if(fr)fr.disabled=checked;
+  if(to)to.disabled=checked;
+}
+function setTime(day,type,val){
+  if(!window._staffDays[day])window._staffDays[day]={is_off:false,from:'09:00',to:'18:00'};
+  window._staffDays[day][type==='from'?'from':'to']=val;
+}
+
+async function submitStaff(si){
+  const y=state.year,m=state.month;
+  const name=STAFF[si];
+  const comment=document.getElementById('comment-input').value;
+  const wd=workDays(y,m);
+  const rows=wd.map(day=>{
+    const d=window._staffDays[day]||{is_off:false,from:'09:00',to:'18:00'};
+    return {staff_name:name,year:y,month:m+1,day,is_off:d.is_off,start_time:d.is_off?null:d.from,end_time:d.is_off?null:d.to,comment:day===wd[0]?comment:null};
+  });
+  document.getElementById('root').innerHTML='<div class="loading">保存中...</div>';
+  await saveStaff(si,rows,comment);
+  state.view='top';
+  render();
+}
+
+async function assignShifts(){
+  const y=state.year,m=state.month;
+  const wd=workDays(y,m);
+  const cnt=[0,0,0];
+  const updates=[];
+  await sb.from('shifts').delete().eq('year',y).eq('month',m+1).eq('assigned',true);
+
+  wd.forEach(day=>{
+    const dayData=getDayData(y,m,day);
+    const avail=STAFF.map((name,si)=>{
+      const r=dayData.find(d=>d.staff_name===name&&!d.is_off);
+      return r?{si,from:r.start_time,to:r.end_time}:null;
+    }).filter(Boolean);
+    avail.sort((a,b)=>cnt[a.si]-cnt[b.si]);
+    avail.forEach(a=>{
+      cnt[a.si]++;
+      updates.push({staff_name:STAFF[a.si],year:y,month:m+1,day,is_off:false,start_time:a.from,end_time:a.to,assigned:true});
+    });
+  });
+
+  if(updates.length>0) await sb.from('shifts').insert(updates);
+  await loadData();
+  state.view='calendar';
+  render();
+}
+
+function renderCalendar(root){
+  const y=state.year,m=state.month;
+  document.getElementById('header-sub').textContent=`${y}年${m+1}月 シフト表`;
+  const cnt=[0,0,0];
+  const wd=workDays(y,m);
+  wd.forEach(day=>{
+    const dd=getDayData(y,m,day);
+    STAFF.forEach((name,si)=>{const r=dd.find(d=>d.staff_name===name&&!d.is_off);if(r)cnt[si]++;});
+  });
+
+  let html=`<div class="tabs">
+    <div class="tab" onclick="state.view='top';render()">ホーム</div>
+    <div class="tab active">カレンダー</div>
+  </div>
+  <div class="sum-grid">
+    ${STAFF.map((n,i)=>`<div class="sum-card"><div class="sum-name">${n}</div><div class="sum-n">${cnt[i]}<span style="font-size:11px;font-weight:400">日</span></div></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="cal-grid">`;
+
+  ['月','火','水','木','金','土','日'].forEach(h=>html+=`<div class="cal-head">${h}</div>`);
+  const first=new Date(y,m,1).getDay();
+  const start=first===0?6:first-1;
+  for(let i=0;i<start;i++)html+=`<div class="cal-cell empty"></div>`;
+  const days=new Date(y,m+1,0).getDate();
+  for(let day=1;day<=days;day++){
+    const closed=isClosed(y,m,day);
+    const dd=getDayData(y,m,day);
+    let badges='';
+    STAFF.forEach((name,si)=>{
+      const r=dd.find(d=>d.staff_name===name&&!d.is_off);
+      if(r)badges+=`<span class="sh-badge ${SHC[si]}">${name.slice(0,1)}: ${r.start_time||''}</span>`;
+    });
+    html+=`<div class="cal-cell${closed?' closed':''}" ${closed?'':` onclick="openDay(${day})"`}>
+      <div class="day-n">${day}</div>${badges}
+    </div>`;
+  }
+  html+=`</div></div>`;
+
+  const comments=STAFF.map((name,si)=>{
+    const r=state.data.find(d=>d.staff_name===name&&d.comment);
+    return r?{name,si,comment:r.comment}:null;
+  }).filter(Boolean);
+  if(comments.length>0){
+    html+=`<div class="card"><h3>コメント</h3>`;
+    comments.forEach(({name,si,comment})=>{
+      html+=`<div class="comment-row">
+        <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${name.slice(0,1)}</div>
+        <div><div style="font-size:12px;font-weight:500">${name}</div><div style="font-size:12px;color:#666">${comment}</div></div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+  root.innerHTML=html;
+}
+
+function openDay(day){
+  alert(`${state.month+1}月${day}日のシフト:\n`+
+    STAFF.map((name,si)=>{
+      const r=getDayData(state.year,state.month,day).find(d=>d.staff_name===name&&!d.is_off);
+      return r?`${name}: ${r.start_time}〜${r.end_time}`:`${name}: 休み`;
+    }).join('\n')
+  );
+}
+
+(async()=>{
+  await loadData();
+  render();
+})();
+</script>
+</body>
+</html>
