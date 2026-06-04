@@ -18,6 +18,8 @@ h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
 .btn{display:block;width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;border:none;text-align:center}
 .btn-primary{background:#3C3489;color:#fff}
 .btn-primary:hover{background:#2d2568}
+.btn-confirm{background:#1a7a4a;color:#fff;display:block;width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;border:none;text-align:center;margin-top:12px}
+.btn-confirm:hover{background:#155e38}
 .btn-sub{background:#f5f5f7;color:#555;font-size:13px;padding:8px;border-radius:8px;border:1px solid #e0e0e0;cursor:pointer;width:100%}
 .field{margin-bottom:10px}
 .field label{font-size:12px;color:#666;display:block;margin-bottom:4px}
@@ -37,10 +39,12 @@ h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
 .time-input{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:95px;color:#1d1d1f;background:#fff}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .cal-head{font-size:10px;color:#999;text-align:center;padding:4px 0}
-.cal-cell{min-height:52px;border-radius:6px;border:1px solid #eee;padding:3px;background:#fff;cursor:pointer;font-size:10px}
+.cal-cell{min-height:56px;border-radius:6px;border:1px solid #eee;padding:3px;background:#fff;cursor:pointer;font-size:10px;position:relative}
 .cal-cell:hover{border-color:#ccc}
 .cal-cell.closed{background:#f5f5f7;cursor:default;opacity:0.4}
 .cal-cell.empty{border:none;background:transparent;cursor:default}
+.cal-cell.has-conflict{border-color:#f59e0b;background:#fffbeb}
+.warn-icon{position:absolute;top:2px;right:2px;font-size:11px;line-height:1}
 .day-n{font-size:11px;color:#666;font-weight:500}
 .sh-badge{font-size:9px;padding:1px 3px;border-radius:3px;margin-top:1px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sh0{background:#E1F5EE;color:#085041}
@@ -63,12 +67,15 @@ h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
 .comment-row:last-child{margin-bottom:0}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
 .modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto}
-.modal h3{font-size:16px;font-weight:600;margin-bottom:12px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:12px;color:#888;margin-bottom:12px}
 .modal-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0}
 .modal-row:last-child{border-bottom:none}
 .modal-actions{display:flex;gap:8px;margin-top:16px}
 .modal-actions button{flex:1;padding:10px;border-radius:8px;font-size:14px;cursor:pointer;border:1px solid #e0e0e0;background:#f5f5f7;color:#333}
 .modal-actions button.save{background:#3C3489;color:#fff;border-color:#3C3489}
+.conflict-badge{font-size:10px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;margin-left:4px}
+.review-banner{background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#92400e;display:flex;align-items:center;gap:8px}
 </style>
 </head>
 <body>
@@ -94,7 +101,10 @@ const SHC = ['sh0','sh1','sh2'];
 
 const HOLIDAYS = new Set(['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24','2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-23']);
 
-let state = {view:'top',staffIdx:null,year:new Date().getFullYear(),month:new Date().getMonth(),data:[],modalDay:null};
+// 被りがあった日を記録する（割り振り時に計算）
+let conflictDays = new Set();
+
+let state = {view:'top',staffIdx:null,year:new Date().getFullYear(),month:new Date().getMonth(),data:[],reviewing:false};
 
 function toKey(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
 function isClosed(y,m,d){const dt=new Date(y,m,d),dow=dt.getDay();return dow===2||dow===0||HOLIDAYS.has(toKey(y,m,d));}
@@ -102,6 +112,7 @@ function isSaturday(y,m,d){return new Date(y,m,d).getDay()===6;}
 function workDays(y,m){const days=new Date(y,m+1,0).getDate(),r=[];for(let d=1;d<=days;d++)if(!isClosed(y,m,d))r.push(d);return r;}
 function timeToMinutes(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
 function calcHours(from,to){const diff=timeToMinutes(to)-timeToMinutes(from);return diff>0?diff/60:0;}
+function timesOverlap(from1,to1,from2,to2){return timeToMinutes(from1)<timeToMinutes(to2)&&timeToMinutes(to1)>timeToMinutes(from2);}
 
 async function loadData(){
   const {data}=await sb.from('shifts').select('*').eq('year',state.year).eq('month',state.month+1);
@@ -110,8 +121,8 @@ async function loadData(){
 
 function getStaffData(si){return state.data.filter(r=>r.staff_name===STAFF[si]);}
 function getDayData(y,m,d){return state.data.filter(r=>r.year===y&&r.month===m+1&&r.day===d);}
+function getAssignedForDay(y,m,d){return state.data.filter(r=>r.year===y&&r.month===m+1&&r.day===d&&r.assigned===true);}
 function isSubmitted(si){return state.data.some(r=>r.staff_name===STAFF[si]);}
-function getAssigned(y,m,d){return state.data.find(r=>r.year===y&&r.month===m+1&&r.day===d&&r.assigned===true);}
 
 async function saveStaff(si,rows){
   await sb.from('shifts').delete().eq('year',state.year).eq('month',state.month+1).eq('staff_name',STAFF[si]).eq('assigned',false);
@@ -123,6 +134,7 @@ function render(){
   const root=document.getElementById('root');
   if(state.view==='top')renderTop(root);
   else if(state.view==='staff')renderStaff(root);
+  else if(state.view==='review')renderReview(root);
   else if(state.view==='calendar')renderCalendar(root);
 }
 
@@ -135,7 +147,7 @@ function renderTop(root){
 
   let html=`<div class="tabs">
     <div class="tab active">ホーム</div>
-    <div class="tab" onclick="state.view='calendar';render()">カレンダー</div>
+    <div class="tab" onclick="state.view='calendar';render()">確定済みシフト</div>
   </div>
   <div class="card">
     <h2>${state.year}年${state.month+1}月 シフト調整</h2>
@@ -166,7 +178,7 @@ function renderTop(root){
 }
 
 async function changeMonth(y,m){
-  state.year=y;state.month=m;
+  state.year=y;state.month=m;conflictDays=new Set();
   document.getElementById('root').innerHTML='<div class="loading">読み込み中...</div>';
   await loadData();render();
 }
@@ -253,21 +265,17 @@ async function submitStaff(si){
 async function assignShifts(){
   const y=state.year,m=state.month;
   const wd=workDays(y,m);
+  conflictDays=new Set();
 
-  // 既存の割り振りを削除
   await sb.from('shifts').delete().eq('year',y).eq('month',m+1).eq('assigned',true);
 
-  // 平日と土曜に分類
   const weekdays=wd.filter(d=>!isSaturday(y,m,d));
   const saturdays=wd.filter(d=>isSaturday(y,m,d));
-
-  // 累計時間トラッカー（平日・土曜それぞれ）
   const weekdayHours=[0,0,0];
   const saturdayHours=[0,0,0];
   const inserts=[];
 
-  function assignDay(day, hoursTracker){
-    // その日に入れるスタッフを取得（休み希望でない人）
+  function assignDay(day,hoursTracker){
     const available=STAFF.map((name,si)=>{
       const r=state.data.find(d=>d.staff_name===name&&d.year===y&&d.month===m+1&&d.day===day&&!d.assigned);
       if(!r||r.is_off)return null;
@@ -276,15 +284,27 @@ async function assignShifts(){
 
     if(available.length===0)return;
 
-    // 累計時間が少ない人を優先して選ぶ
-    available.sort((a,b)=>hoursTracker[a.si]-hoursTracker[b.si]);
-    const chosen=available[0];
-    hoursTracker[chosen.si]+=chosen.hours;
+    // 被りがあるかチェック → あればconflictDaysに追加
+    let hasConflict=false;
+    for(let i=0;i<available.length;i++){
+      for(let j=i+1;j<available.length;j++){
+        if(timesOverlap(available[i].from,available[i].to,available[j].from,available[j].to)){
+          hasConflict=true;break;
+        }
+      }
+      if(hasConflict)break;
+    }
+    if(hasConflict)conflictDays.add(day);
 
-    inserts.push({
-      staff_name:STAFF[chosen.si],year:y,month:m+1,day,
-      is_off:false,start_time:chosen.from,end_time:chosen.to,
-      assigned:true
+    available.sort((a,b)=>hoursTracker[a.si]-hoursTracker[b.si]);
+    const assignedSlots=[];
+    available.forEach(candidate=>{
+      const overlaps=assignedSlots.some(slot=>timesOverlap(candidate.from,candidate.to,slot.from,slot.to));
+      if(!overlaps){
+        assignedSlots.push(candidate);
+        hoursTracker[candidate.si]+=candidate.hours;
+        inserts.push({staff_name:STAFF[candidate.si],year:y,month:m+1,day,is_off:false,start_time:candidate.from,end_time:candidate.to,assigned:true});
+      }
     });
   }
 
@@ -293,32 +313,179 @@ async function assignShifts(){
 
   if(inserts.length>0)await sb.from('shifts').insert(inserts);
   await loadData();
-  state.view='calendar';render();
+  // 割り振り後は確認・調整画面へ
+  state.view='review';render();
 }
 
-function renderCalendar(root){
+// ===== 確認・調整画面 =====
+function renderReview(root){
   const y=state.year,m=state.month;
-  document.getElementById('header-sub').textContent=`${y}年${m+1}月 シフト表`;
+  document.getElementById('header-sub').textContent=`${y}年${m+1}月 確認・調整`;
 
-  // 統計計算
   const totalHours=[0,0,0];
   const satHours=[0,0,0];
   const weekHours=[0,0,0];
   const wd=workDays(y,m);
   wd.forEach(day=>{
-    const assigned=getAssigned(y,m,day);
-    if(!assigned)return;
-    const si=STAFF.indexOf(assigned.staff_name);
-    if(si<0)return;
-    const h=calcHours(assigned.start_time,assigned.end_time);
-    totalHours[si]+=h;
-    if(isSaturday(y,m,day))satHours[si]+=h;
-    else weekHours[si]+=h;
+    const assigned=getAssignedForDay(y,m,day);
+    assigned.forEach(r=>{
+      const si=STAFF.indexOf(r.staff_name);
+      if(si<0)return;
+      const h=calcHours(r.start_time,r.end_time);
+      totalHours[si]+=h;
+      if(isSaturday(y,m,day))satHours[si]+=h;
+      else weekHours[si]+=h;
+    });
+  });
+
+  const conflictCount=conflictDays.size;
+
+  let html=``;
+
+  // 被りがある場合はバナーを表示
+  if(conflictCount>0){
+    html+=`<div class="review-banner">
+      <span style="font-size:18px">⚠️</span>
+      <div><strong>${conflictCount}日</strong>、希望時間が被っていたため自動で調整しました。<br>該当日を確認・修正してください。</div>
+    </div>`;
+  }
+
+  html+=`<div class="sum-grid">
+    ${STAFF.map((n,i)=>`<div class="sum-card">
+      <div class="sum-name">${n}</div>
+      <div class="sum-n">${totalHours[i].toFixed(1)}<span style="font-size:11px;font-weight:400">h</span></div>
+      <div class="sum-sub">平日${weekHours[i].toFixed(1)}h / 土${satHours[i].toFixed(1)}h</div>
+    </div>`).join('')}
+  </div>
+  <div class="card">
+    <p class="hint" style="margin-bottom:8px">日付をタップして手動で調整できます。${conflictCount>0?'<span style="color:#92400e">⚠️は希望が被っていた日です。</span>':''}</p>
+    <div class="cal-grid">`;
+
+  ['月','火','水','木','金','土','日'].forEach(h=>html+=`<div class="cal-head">${h}</div>`);
+  const first=new Date(y,m,1).getDay();
+  const start=first===0?6:first-1;
+  for(let i=0;i<start;i++)html+=`<div class="cal-cell empty"></div>`;
+  const days=new Date(y,m+1,0).getDate();
+  for(let day=1;day<=days;day++){
+    const closed=isClosed(y,m,day);
+    const assigned=getAssignedForDay(y,m,day);
+    const isSat=new Date(y,m,day).getDay()===6;
+    const isConflict=conflictDays.has(day);
+    let badges=assigned.map(r=>{
+      const si=STAFF.indexOf(r.staff_name);
+      return `<span class="sh-badge ${SHC[si]}">${r.staff_name.slice(0,1)}: ${r.start_time||''}</span>`;
+    }).join('');
+    const warnIcon=isConflict?`<span class="warn-icon">⚠️</span>`:'';
+    html+=`<div class="cal-cell${closed?' closed':''}${isConflict?' has-conflict':''}" ${closed?'':` onclick="openReviewModal(${day})"`} style="${isSat&&!closed?'border-color:#AFA9EC;':''}">
+      <div class="day-n" style="${isSat?'color:#0C447C':''}">${day}</div>${warnIcon}${badges}
+    </div>`;
+  }
+  html+=`</div></div>`;
+
+  // コメント
+  const comments=STAFF.map((name,si)=>{
+    const r=state.data.find(d=>d.staff_name===name&&d.comment);
+    return r?{name,si,comment:r.comment}:null;
+  }).filter(Boolean);
+  if(comments.length>0){
+    html+=`<div class="card"><h3>コメント</h3>`;
+    comments.forEach(({name,si,comment})=>{
+      html+=`<div class="comment-row">
+        <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${name.slice(0,1)}</div>
+        <div><div style="font-size:12px;font-weight:500">${name}</div><div style="font-size:12px;color:#666">${comment}</div></div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  html+=`<button class="btn-confirm" onclick="confirmShift()">✓ このシフトで確定する</button>`;
+  root.innerHTML=html;
+}
+
+function openReviewModal(day){
+  const y=state.year,m=state.month;
+  const dows=['日','月','火','水','木','金','土'];
+  const dt=new Date(y,m,day);
+  const isConflict=conflictDays.has(day);
+  const assigned=getAssignedForDay(y,m,day);
+  const assignedSis=assigned.map(r=>STAFF.indexOf(r.staff_name));
+
+  let rows=STAFF.map((name,si)=>{
+    const avail=state.data.find(r=>r.staff_name===name&&r.year===y&&r.month===m+1&&r.day===day&&!r.assigned);
+    const canWork=avail&&!avail.is_off;
+    const isChosen=assignedSis.includes(si);
+    const wasExcluded=canWork&&!isChosen;
+    return `<div class="modal-row">
+      <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px">${name.slice(0,1)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${name}${wasExcluded?'<span class="conflict-badge">被りで除外</span>':''}</div>
+        <div style="font-size:11px;color:#888">${canWork?`${avail.start_time}〜${avail.end_time}`:'休み希望'}</div>
+      </div>
+      <input type="checkbox" name="assign_${si}" ${isChosen?'checked':''} ${!canWork?'disabled':''} style="width:18px;height:18px"/>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modal-container').innerHTML=`
+  <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3>${m+1}月${day}日（${dows[dt.getDay()]}）</h3>
+      <p class="modal-sub">${isConflict?'⚠️ 希望時間が被っていた日です':''}チェックを入れた人がシフトに入ります</p>
+      ${rows}
+      <div class="modal-actions">
+        <button onclick="closeModal()">キャンセル</button>
+        <button class="save" onclick="saveReviewModal(${day})">保存</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveReviewModal(day){
+  const y=state.year,m=state.month;
+  await sb.from('shifts').delete().eq('year',y).eq('month',m+1).eq('day',day).eq('assigned',true);
+  const newInserts=[];
+  STAFF.forEach((name,si)=>{
+    const cb=document.querySelector(`input[name="assign_${si}"]`);
+    if(cb&&cb.checked&&!cb.disabled){
+      const avail=state.data.find(r=>r.staff_name===name&&r.year===y&&r.month===m+1&&r.day===day&&!r.assigned);
+      if(avail){
+        newInserts.push({staff_name:name,year:y,month:m+1,day,is_off:false,start_time:avail.start_time,end_time:avail.end_time,assigned:true});
+      }
+    }
+  });
+  if(newInserts.length>0)await sb.from('shifts').insert(newInserts);
+  await loadData();
+  closeModal();
+  renderReview(document.getElementById('root'));
+}
+
+async function confirmShift(){
+  if(!confirm('このシフトで確定しますか？'))return;
+  state.view='calendar';render();
+}
+
+function renderCalendar(root){
+  const y=state.year,m=state.month;
+  document.getElementById('header-sub').textContent=`${y}年${m+1}月 確定シフト表`;
+
+  const totalHours=[0,0,0];
+  const satHours=[0,0,0];
+  const weekHours=[0,0,0];
+  const wd=workDays(y,m);
+  wd.forEach(day=>{
+    const assigned=getAssignedForDay(y,m,day);
+    assigned.forEach(r=>{
+      const si=STAFF.indexOf(r.staff_name);
+      if(si<0)return;
+      const h=calcHours(r.start_time,r.end_time);
+      totalHours[si]+=h;
+      if(isSaturday(y,m,day))satHours[si]+=h;
+      else weekHours[si]+=h;
+    });
   });
 
   let html=`<div class="tabs">
     <div class="tab" onclick="state.view='top';render()">ホーム</div>
-    <div class="tab active">カレンダー</div>
+    <div class="tab active">確定シフト表</div>
   </div>
   <div class="sum-grid">
     ${STAFF.map((n,i)=>`<div class="sum-card">
@@ -337,20 +504,18 @@ function renderCalendar(root){
   const days=new Date(y,m+1,0).getDate();
   for(let day=1;day<=days;day++){
     const closed=isClosed(y,m,day);
-    const assigned=getAssigned(y,m,day);
-    const si=assigned?STAFF.indexOf(assigned.staff_name):-1;
+    const assigned=getAssignedForDay(y,m,day);
     const isSat=new Date(y,m,day).getDay()===6;
-    let badge='';
-    if(assigned&&si>=0){
-      badge=`<span class="sh-badge ${SHC[si]}">${STAFF[si].slice(0,1)}: ${assigned.start_time||''}</span>`;
-    }
-    html+=`<div class="cal-cell${closed?' closed':''}" ${closed?'':` onclick="openDayModal(${day})"`} style="${isSat&&!closed?'border-color:#AFA9EC;':''}}">
-      <div class="day-n" style="${isSat?'color:#0C447C':''}">${day}</div>${badge}
+    let badges=assigned.map(r=>{
+      const si=STAFF.indexOf(r.staff_name);
+      return `<span class="sh-badge ${SHC[si]}">${r.staff_name.slice(0,1)}: ${r.start_time||''}</span>`;
+    }).join('');
+    html+=`<div class="cal-cell${closed?' closed':''}" style="${isSat&&!closed?'border-color:#AFA9EC;':''}">
+      <div class="day-n" style="${isSat?'color:#0C447C':''}">${day}</div>${badges}
     </div>`;
   }
   html+=`</div></div>`;
 
-  // コメント表示
   const comments=STAFF.map((name,si)=>{
     const r=state.data.find(d=>d.staff_name===name&&d.comment);
     return r?{name,si,comment:r.comment}:null;
@@ -366,55 +531,6 @@ function renderCalendar(root){
     html+=`</div>`;
   }
   root.innerHTML=html;
-}
-
-function openDayModal(day){
-  const y=state.year,m=state.month;
-  const dows=['日','月','火','水','木','金','土'];
-  const dt=new Date(y,m,day);
-  const assigned=getAssigned(y,m,day);
-  const currentSi=assigned?STAFF.indexOf(assigned.staff_name):-1;
-
-  let rows=STAFF.map((name,si)=>{
-    const avail=state.data.find(r=>r.staff_name===name&&r.year===y&&r.month===m+1&&r.day===day&&!r.assigned);
-    const canWork=avail&&!avail.is_off;
-    const isChosen=si===currentSi;
-    return `<div class="modal-row">
-      <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px">${name.slice(0,1)}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:500">${name}</div>
-        <div style="font-size:11px;color:#888">${canWork?`${avail.start_time}〜${avail.end_time}`:'休み希望'}</div>
-      </div>
-      <input type="radio" name="assign" value="${si}" ${isChosen?'checked':''} ${!canWork?'disabled':''} style="width:18px;height:18px"/>
-    </div>`;
-  }).join('');
-
-  document.getElementById('modal-container').innerHTML=`
-  <div class="modal-bg" onclick="if(event.target===this)closeModal()">
-    <div class="modal">
-      <h3>${m+1}月${day}日（${dows[dt.getDay()]}）のシフト</h3>
-      ${rows}
-      <div class="modal-actions">
-        <button onclick="closeModal()">キャンセル</button>
-        <button class="save" onclick="saveDayModal(${day})">保存</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function saveDayModal(day){
-  const y=state.year,m=state.month;
-  const selected=document.querySelector('input[name="assign"]:checked');
-  if(!selected){closeModal();return;}
-  const si=parseInt(selected.value);
-  const avail=state.data.find(r=>r.staff_name===STAFF[si]&&r.year===y&&r.month===m+1&&r.day===day&&!r.assigned);
-  await sb.from('shifts').delete().eq('year',y).eq('month',m+1).eq('day',day).eq('assigned',true);
-  if(avail){
-    await sb.from('shifts').insert({staff_name:STAFF[si],year:y,month:m+1,day,is_off:false,start_time:avail.start_time,end_time:avail.end_time,assigned:true});
-  }
-  await loadData();
-  closeModal();
-  renderCalendar(document.getElementById('root'));
 }
 
 function closeModal(){document.getElementById('modal-container').innerHTML='';}
