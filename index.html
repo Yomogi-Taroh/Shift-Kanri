@@ -415,13 +415,24 @@ function openReviewModal(day){
     const canWork=avail&&!avail.is_off;
     const isChosen=assignedSis.includes(si);
     const wasExcluded=canWork&&!isChosen;
-    return `<div class="modal-row">
-      <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px">${name.slice(0,1)}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:500">${name}${wasExcluded?'<span class="conflict-badge">被りで除外</span>':''}</div>
-        <div style="font-size:11px;color:#888">${canWork?`${avail.start_time}〜${avail.end_time}`:'休み希望'}</div>
+    // 現在のシフト時間（割り振り済みがあればそれ、なければ希望時間）
+    const assignedEntry=assigned.find(r=>STAFF.indexOf(r.staff_name)===si);
+    const currentFrom=assignedEntry?assignedEntry.start_time:(avail?avail.start_time:'09:00');
+    const currentTo=assignedEntry?assignedEntry.end_time:(avail?avail.end_time:'18:00');
+    return `<div class="modal-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;width:100%">
+        <div class="avatar ${AVC[si]}" style="width:28px;height:28px;font-size:11px">${name.slice(0,1)}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500">${name}${wasExcluded?'<span class="conflict-badge">被りで除外</span>':''}</div>
+          <div style="font-size:11px;color:#888">${canWork?`希望: ${avail.start_time}〜${avail.end_time}`:'休み希望'}</div>
+        </div>
+        <input type="checkbox" name="assign_${si}" id="cb_${si}" ${isChosen?'checked':''} ${!canWork?'disabled':''} style="width:18px;height:18px" onchange="toggleTimeRow(${si},${!canWork})"/>
       </div>
-      <input type="checkbox" name="assign_${si}" ${isChosen?'checked':''} ${!canWork?'disabled':''} style="width:18px;height:18px"/>
+      <div id="time-row-${si}" style="display:${(isChosen||wasExcluded)&&canWork?'flex':'none'};align-items:center;gap:6px;padding-left:36px;width:100%">
+        <input type="time" id="from_${si}" value="${currentFrom}" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#1d1d1f;background:#fff;width:100px"/>
+        <span style="font-size:12px;color:#999">〜</span>
+        <input type="time" id="to_${si}" value="${currentTo}" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#1d1d1f;background:#fff;width:100px"/>
+      </div>
     </div>`;
   }).join('');
 
@@ -429,7 +440,7 @@ function openReviewModal(day){
   <div class="modal-bg" onclick="if(event.target===this)closeModal()">
     <div class="modal">
       <h3>${m+1}月${day}日（${dows[dt.getDay()]}）</h3>
-      <p class="modal-sub">${isConflict?'⚠️ 希望時間が被っていた日です':''}チェックを入れた人がシフトに入ります</p>
+      <p class="modal-sub">${isConflict?'⚠️ 希望時間が被っていた日です。':''}チェックを入れた人がシフトに入ります。時間も変更できます。</p>
       ${rows}
       <div class="modal-actions">
         <button onclick="closeModal()">キャンセル</button>
@@ -439,17 +450,25 @@ function openReviewModal(day){
   </div>`;
 }
 
+function toggleTimeRow(si,disabled){
+  if(disabled)return;
+  const cb=document.getElementById('cb_'+si);
+  const row=document.getElementById('time-row-'+si);
+  if(row)row.style.display=cb.checked?'flex':'none';
+}
+
 async function saveReviewModal(day){
   const y=state.year,m=state.month;
   await sb.from('shifts').delete().eq('year',y).eq('month',m+1).eq('day',day).eq('assigned',true);
   const newInserts=[];
   STAFF.forEach((name,si)=>{
-    const cb=document.querySelector(`input[name="assign_${si}"]`);
+    const cb=document.getElementById('cb_'+si);
     if(cb&&cb.checked&&!cb.disabled){
-      const avail=state.data.find(r=>r.staff_name===name&&r.year===y&&r.month===m+1&&r.day===day&&!r.assigned);
-      if(avail){
-        newInserts.push({staff_name:name,year:y,month:m+1,day,is_off:false,start_time:avail.start_time,end_time:avail.end_time,assigned:true});
-      }
+      const fromEl=document.getElementById('from_'+si);
+      const toEl=document.getElementById('to_'+si);
+      const from=fromEl?fromEl.value:'09:00';
+      const to=toEl?toEl.value:'18:00';
+      newInserts.push({staff_name:name,year:y,month:m+1,day,is_off:false,start_time:from,end_time:to,assigned:true});
     }
   });
   if(newInserts.length>0)await sb.from('shifts').insert(newInserts);
