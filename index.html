@@ -24,6 +24,7 @@ h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
 .field{margin-bottom:10px}
 .field label{font-size:12px;color:#666;display:block;margin-bottom:4px}
 .field textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1d1d1f;resize:vertical;min-height:60px;font-family:inherit}
+.field input[type="password"]{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1d1d1f}
 .staff-btn{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;border:1px solid #e0e0e0;background:#fff;cursor:pointer;margin-bottom:8px;width:100%;text-align:left}
 .staff-btn:hover{background:#f9f9fb}
 .avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0}
@@ -37,6 +38,13 @@ h3{font-size:14px;font-weight:500;margin-bottom:8px;color:#1d1d1f}
 .day-row:last-child{border-bottom:none}
 .day-label{font-size:13px;min-width:72px;color:#333;flex-shrink:0}
 .time-input{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:95px;color:#1d1d1f;background:#fff}
+.time-input:disabled{
+  background-color:#e5e5ea;
+  background-image:repeating-linear-gradient(45deg, rgba(0,0,0,0.08) 0, rgba(0,0,0,0.08) 2px, transparent 2px, transparent 7px);
+  color:#999;
+  cursor:not-allowed;
+  border-color:#ddd;
+}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .cal-head{font-size:10px;color:#999;text-align:center;padding:4px 0}
 .cal-cell{min-height:56px;border-radius:6px;border:1px solid #eee;padding:3px;background:#fff;cursor:pointer;font-size:10px;position:relative}
@@ -98,6 +106,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const STAFF = ['坂本美桜','白井晴','関川穂乃佳'];
 const AVC = ['av0','av1','av2'];
 const SHC = ['sh0','sh1','sh2'];
+
+// 自動割り振り実行時に確認するパスワード。必要に応じて変更してください。
+const ASSIGN_PASSWORD = 'yomogi2025';
 
 const HOLIDAYS = new Set(['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24','2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-23']);
 
@@ -169,7 +180,7 @@ function renderTop(root){
   });
   html+=`</div>`;
   if(allDone){
-    html+=`<button class="btn btn-primary" onclick="assignShifts()">シフトを自動割り振り</button>`;
+    html+=`<button class="btn btn-primary" onclick="openPasswordModal()">シフトを自動割り振り</button>`;
   } else {
     const cnt=STAFF.filter((_,i)=>isSubmitted(i)).length;
     html+=`<div style="text-align:center;padding:8px 0;font-size:13px;color:#888">${cnt}/3名が入力完了</div>`;
@@ -260,6 +271,35 @@ async function submitStaff(si){
   document.getElementById('root').innerHTML='<div class="loading">保存中...</div>';
   await saveStaff(si,rows);
   state.view='top';render();
+}
+
+// ===== パスワード確認モーダル =====
+function openPasswordModal(){
+  document.getElementById('modal-container').innerHTML=`
+  <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3>パスワード確認</h3>
+      <p class="modal-sub">自動割り振りを実行するにはパスワードを入力してください。</p>
+      <div class="field"><input type="password" id="assign-password" placeholder="パスワード" onkeydown="if(event.key==='Enter')checkPasswordAndAssign()"/></div>
+      <div class="modal-actions">
+        <button onclick="closeModal()">キャンセル</button>
+        <button class="save" onclick="checkPasswordAndAssign()">実行</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(()=>{const el=document.getElementById('assign-password');if(el)el.focus();},50);
+}
+
+async function checkPasswordAndAssign(){
+  const el=document.getElementById('assign-password');
+  const pw=el?el.value:'';
+  if(pw!==ASSIGN_PASSWORD){
+    alert('パスワードが違います');
+    return;
+  }
+  closeModal();
+  document.getElementById('root').innerHTML='<div class="loading">割り振り中...</div>';
+  await assignShifts();
 }
 
 async function assignShifts(){
@@ -514,6 +554,7 @@ function renderCalendar(root){
     </div>`).join('')}
   </div>
   <div class="card">
+    <p class="hint" style="margin-bottom:8px">日付をタップすると、その日の勤務時間を確認できます。</p>
     <div class="cal-grid">`;
 
   ['月','火','水','木','金','土','日'].forEach(h=>html+=`<div class="cal-head">${h}</div>`);
@@ -529,7 +570,7 @@ function renderCalendar(root){
       const si=STAFF.indexOf(r.staff_name);
       return `<span class="sh-badge ${SHC[si]}">${r.staff_name.slice(0,1)}: ${r.start_time||''}</span>`;
     }).join('');
-    html+=`<div class="cal-cell${closed?' closed':''}" style="${isSat&&!closed?'border-color:#AFA9EC;':''}">
+    html+=`<div class="cal-cell${closed?' closed':''}" ${closed?'':` onclick="openCalendarDayModal(${day})"`} style="${isSat&&!closed?'border-color:#AFA9EC;':''}">
       <div class="day-n" style="${isSat?'color:#0C447C':''}">${day}</div>${badges}
     </div>`;
   }
@@ -550,6 +591,38 @@ function renderCalendar(root){
     html+=`</div>`;
   }
   root.innerHTML=html;
+}
+
+function openCalendarDayModal(day){
+  const y=state.year,m=state.month;
+  const dows=['日','月','火','水','木','金','土'];
+  const dt=new Date(y,m,day);
+  const assigned=getAssignedForDay(y,m,day);
+
+  let rows;
+  if(assigned.length===0){
+    rows='<p style="font-size:13px;color:#888;padding:8px 0">この日の勤務者はいません。</p>';
+  } else {
+    rows=assigned.map(r=>{
+      const si=STAFF.indexOf(r.staff_name);
+      return `<div class="modal-row">
+        <div class="avatar ${AVC[si]}" style="width:32px;height:32px;font-size:12px">${r.staff_name.slice(0,1)}</div>
+        <div><div style="font-size:14px;font-weight:500">${r.staff_name}</div>
+        <div style="font-size:13px;color:#555">${r.start_time}〜${r.end_time}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('modal-container').innerHTML=`
+  <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3>${m+1}月${day}日（${dows[dt.getDay()]}）の勤務時間</h3>
+      ${rows}
+      <div class="modal-actions">
+        <button onclick="closeModal()">閉じる</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function closeModal(){document.getElementById('modal-container').innerHTML='';}
