@@ -110,6 +110,9 @@ const SHC = ['sh0','sh1','sh2'];
 // 自動割り振り実行時に確認するパスワード。必要に応じて変更してください。
 const ASSIGN_PASSWORD = 'yomogi2025';
 
+// シフト確定時に通知メールを送るGASウェブアプリのURL
+const NOTIFY_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxYLM_icq60wNl28KNUrOg0GST2voRuv5oYuUta55Ef-NygI1Wsgeix28NO3muYYmv9mQ/exec';
+
 const HOLIDAYS = new Set(['2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24','2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-23']);
 
 // 被りがあった日を記録する（割り振り時に計算）
@@ -520,6 +523,16 @@ async function saveReviewModal(day){
 async function confirmShift(){
   if(!confirm('このシフトで確定しますか？'))return;
   state.view='calendar';render();
+  // スタッフへ確定通知メールを送信（失敗しても画面遷移には影響させない）
+  try{
+    await fetch(NOTIFY_WEBHOOK_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({year:state.year,month:state.month+1})
+    });
+  }catch(err){
+    console.error('確定通知メールの送信に失敗しました',err);
+  }
 }
 
 function renderCalendar(root){
